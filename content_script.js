@@ -1,298 +1,196 @@
-// Inject tooltip styles into the page
-function injectTooltipStyles() {
-    const style = document.createElement("style");
-    style.textContent = `
-        .price-rounder-wrapped {
-            position: relative;
-            cursor: default;
-        }
-        .price-rounder-wrapped::after {
-            content: attr(data-original-price);
-            position: absolute;
-            bottom: calc(100% + 6px);
-            left: 50%;
-            transform: translateX(-50%) scale(0.95);
-            background: rgba(24, 24, 27, 0.92);
-            color: #f4f4f5;
-            font-size: 12px;
-            font-weight: 500;
-            line-height: 1;
-            padding: 5px 9px;
-            border-radius: 6px;
-            white-space: nowrap;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.15s ease, transform 0.15s ease;
-            z-index: 2147483647;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
-            letter-spacing: 0.01em;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        }
-        .price-rounder-wrapped:hover::after {
-            opacity: 1;
-            transform: translateX(-50%) scale(1);
-        }
-        .price-rounder-wrapped::before {
-            content: "";
-            position: absolute;
-            bottom: calc(100% + 2px);
-            left: 50%;
-            transform: translateX(-50%) scale(0.95);
-            border: 4px solid transparent;
-            border-top-color: rgba(24, 24, 27, 0.92);
-            opacity: 0;
-            transition: opacity 0.15s ease, transform 0.15s ease;
-            pointer-events: none;
-            z-index: 2147483647;
-        }
-        .price-rounder-wrapped:hover::before {
-            opacity: 1;
-            transform: translateX(-50%) scale(1);
-        }
-    `;
-    document.head.appendChild(style);
-}
+const PROCESSED_CLASS = "price-rounder-wrapped";
+const VALUE_PATTERN = `(\\d\\s*?){1,6}([.,]\\d{1,2})?`;
+const CURRENCY_PATTERN = `([€$£¥₹₩₽₺₪₦৳₱₨৳]|zł|CHF|د.إ|USD|EUR)`;
+const PRICE_PATTERN = new RegExp(`(${VALUE_PATTERN}\\s?${CURRENCY_PATTERN})|(${CURRENCY_PATTERN}\\s?${VALUE_PATTERN})`, "g");
 
-// add a fraction to the price if it exists
-function return_amazon_fraction(priceContainer) {
-    return "," + (Array.from(priceContainer.childNodes).some((node) => node.classList.contains("a-price-fraction")) ? priceContainer.getElementsByClassName("a-price-fraction")[0].textContent : "");
-}
+let activeBrackets = DEFAULT_BRACKETS;
 
-// round the price following some rules
+// ── Rounding ──
+
 function roundPrice(price) {
-    // For prices over 200, round to the nearest ten if the units are more that 4.9 (295€ => 300€)
-    if (price > 200 && price % 10 > 4.9) {
-        price = Math.ceil(price / 10) * 10;
+    for (const bracket of activeBrackets) {
+        if (price >= bracket.from && price < bracket.to) {
+            return Math.ceil(price / bracket.precision) * bracket.precision;
+        }
     }
-
-    // For prices over 80, round to the nearest ten if the units are close to rounding up (88€ => 90€)
-    else if (price > 80 && price % 10 > 6.9) {
-        price = Math.ceil(price / 10) * 10;
-    }
-
-    // Round to the nearest whole number if cents are >= 0.85
-    else if (price % 1 >= 0.85) {
-        price = Math.round(price);
-    }
-
-    // Round to the nearest 0.1 if cents in tenths place are close to rounding up (e.g., 4.49 to 4.50)
-    else if (price % 0.1 > 0.089) {
-        price = Number(price.toFixed(1));
-    }
-
     return price;
 }
 
-// Helper function to format and replace a price string, returns { original, rounded }
-function formatPrice(price, currencySymbolsRegex) {
-    const currencyMatch = price.match(currencySymbolsRegex);
+// ── Price formatting ──
+
+function formatPrice(priceStr) {
+    const currencyMatch = priceStr.match(CURRENCY_PATTERN);
     const currency = currencyMatch[0];
     const currencyFirst = currencyMatch.index === 0;
 
-    let formattedPrice = price.replace(currency, "").replace(/\s+/g, "");
+    let numericStr = priceStr.replace(currency, "").replace(/\s+/g, "");
+    const useComma = numericStr.includes(",");
+    if (useComma) numericStr = numericStr.replace(",", ".");
 
-    const useComma = formattedPrice.includes(",");
-    useComma && (formattedPrice = formattedPrice.replace(",", "."));
+    let rounded = roundPrice(Number(numericStr)).toFixed(2);
+    if (useComma) rounded = rounded.replace(".", ",");
 
-    const numericValue = Number(formattedPrice);
-    const roundedValue = roundPrice(numericValue);
-
-    // Skip if nothing changed
-    if (numericValue === roundedValue) {
-        return null;
-    }
-
-    let roundedPrice = roundedValue.toFixed(2);
-    useComma && (roundedPrice = roundedPrice.replace(".", ","));
-
-    const roundedString = currencyFirst ? currency + roundedPrice : roundedPrice + currency;
-
-    return { original: price, rounded: roundedString };
+    const roundedStr = currencyFirst ? currency + rounded : rounded + currency;
+    return { original: priceStr, rounded: roundedStr };
 }
 
-// Create a tooltip-wrapped span for a rounded price
+// ── DOM helpers ──
+
+function isProcessed(element) {
+    return element.classList && element.classList.contains(PROCESSED_CLASS);
+}
+
 function createTooltipSpan(roundedText, originalText) {
     const span = document.createElement("span");
-    span.className = "price-rounder-wrapped";
+    span.className = PROCESSED_CLASS;
     span.setAttribute("data-original-price", originalText);
     span.textContent = roundedText;
     return span;
 }
 
-// round any price present in the element given by the application
-const processElements = (elements) => {
-    const valuePattern = `(\\d\\s*?){1,6}([.,]\\d{1,2})?`;
-    const currencySymbolsRegex = `([€$£¥₹₩₽₺₪₦৳₱₨৳]|zł|CHF|د.إ|USD|EUR)`;
-    const pricePattern = new RegExp(`(${valuePattern}\\s?${currencySymbolsRegex})|(${currencySymbolsRegex}\\s?${valuePattern})`, "g");
-
-    elements.forEach((element) => {
-        try {
-            // Skip elements we already processed
-            if (element.classList && element.classList.contains("price-rounder-wrapped")) {
-                return;
-            }
-
-            // Regular price in text nodes
-            let target_node = null;
-            if (element.children.length <= 1) {
-                target_node = Array.from(element.childNodes).find((node) => node.nodeType === Node.TEXT_NODE);
-            }
-            const matchedPrices = target_node?.nodeValue.match(pricePattern);
-            if (matchedPrices) {
-                // Build a document fragment that replaces the text node,
-                // wrapping each matched price in a tooltip span
-                const text = target_node.nodeValue;
-                const fragment = document.createDocumentFragment();
-                let lastIndex = 0;
-                let anyReplaced = false;
-
-                // Use a fresh regex for exec iteration
-                const iterRegex = new RegExp(pricePattern.source, "g");
-                let match;
-                while ((match = iterRegex.exec(text)) !== null) {
-                    const original = match[0];
-                    const result = formatPrice(original, currencySymbolsRegex);
-
-                    // Add any text before this match
-                    if (match.index > lastIndex) {
-                        fragment.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
-                    }
-
-                    if (result) {
-                        // Price was rounded — wrap in tooltip span
-                        fragment.appendChild(createTooltipSpan(result.rounded, result.original));
-                        anyReplaced = true;
-                    } else {
-                        // Price unchanged — keep as text
-                        fragment.appendChild(document.createTextNode(original));
-                    }
-
-                    lastIndex = match.index + original.length;
-                }
-
-                if (anyReplaced) {
-                    // Add any remaining text after the last match
-                    if (lastIndex < text.length) {
-                        fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
-                    }
-                    target_node.parentNode.replaceChild(fragment, target_node);
-                }
-            }
-
-            // Handle Amazon price display
-            else if (element.classList && element.classList.contains("a-price")) {
-                let priceContainer = element.querySelector('span[aria-hidden="true"]');
-                if (priceContainer && priceContainer.children.length > 0) {
-                    const offscreenEl = element.getElementsByClassName("a-offscreen")[0];
-                    const priceText = offscreenEl ? offscreenEl.textContent : null;
-                    let result = null;
-
-                    if (priceText && priceText.match(pricePattern)) {
-                        result = formatPrice(priceText, currencySymbolsRegex);
-                    } else {
-                        let reconstructed = (priceContainer.getElementsByClassName("a-price-whole")[0].textContent.replace(/\s+/g, "") + return_amazon_fraction(priceContainer)).replaceAll(",", ".").replace("..", ".") + priceContainer.getElementsByClassName("a-price-symbol")[0].textContent;
-                        result = formatPrice(reconstructed, currencySymbolsRegex);
-                    }
-
-                    if (result) {
-                        priceContainer.textContent = "";
-                        priceContainer.appendChild(createTooltipSpan(result.rounded, result.original));
-                    }
-                }
-            }
-        } catch (error) {
-            console.error("An error occurred while processing " + element + ": " + error);
-        }
-    });
-};
-
-function get_active_tab_hostname() {
-    return new URL(window.location.href).hostname;
-}
-
-// get the valid urls stored in Firefox's storage
-async function get_valid_urls() {
-    return (await browser.storage.local.get("valid_urls")).valid_urls || [];
-}
-
-// query all elements, including shadow ones
 function queryAllDeep(selector, root = document) {
     const elements = Array.from(root.querySelectorAll(selector));
-
-    root.querySelectorAll("*").forEach((element) => {
-        if (element.shadowRoot) {
-            elements.push(...queryAllDeep(selector, element.shadowRoot));
+    for (const el of root.querySelectorAll("*")) {
+        if (el.shadowRoot) {
+            elements.push(...queryAllDeep(selector, el.shadowRoot));
         }
-    });
-
+    }
     return elements;
 }
 
-// initialize the extension
-async function initialize(force) {
-    let valid_urls = await get_valid_urls();
-    const active_page_hostname = await get_active_tab_hostname();
+// ── Amazon-specific ──
 
-    if (valid_urls.includes(active_page_hostname) || force) {
-        // Inject tooltip CSS once
-        injectTooltipStyles();
+function getAmazonFraction(priceContainer) {
+    const hasFraction = Array.from(priceContainer.childNodes).some((node) => node.classList && node.classList.contains("a-price-fraction"));
+    return "," + (hasFraction ? priceContainer.getElementsByClassName("a-price-fraction")[0].textContent : "");
+}
 
-        // Initialization
-        initialRounding = () => processElements(queryAllDeep("*"));
+function processAmazonPrice(element) {
+    const priceContainer = element.querySelector('span[aria-hidden="true"]');
+    if (!priceContainer || priceContainer.children.length === 0) return;
 
-        if (document.readyState !== "loading") {
-            initialRounding();
-        } else {
-            document.addEventListener("DOMContentLoaded", function () {
-                initialRounding();
-            });
+    const offscreenEl = element.getElementsByClassName("a-offscreen")[0];
+    const offscreenText = offscreenEl ? offscreenEl.textContent : null;
+
+    let result;
+    if (offscreenText && offscreenText.match(PRICE_PATTERN)) {
+        result = formatPrice(offscreenText);
+    } else {
+        const whole = priceContainer.getElementsByClassName("a-price-whole")[0].textContent.replace(/\s+/g, "");
+        const symbol = priceContainer.getElementsByClassName("a-price-symbol")[0].textContent;
+        const reconstructed = (whole + getAmazonFraction(priceContainer)).replaceAll(",", ".").replace("..", ".") + symbol;
+        result = formatPrice(reconstructed);
+    }
+
+    priceContainer.textContent = "";
+    priceContainer.appendChild(createTooltipSpan(result.rounded, result.original));
+}
+
+// ── Text node processing ──
+
+function processTextNode(targetNode) {
+    const text = targetNode.nodeValue;
+    const fragment = document.createDocumentFragment();
+    let lastIndex = 0;
+    let anyMatched = false;
+
+    const regex = new RegExp(PRICE_PATTERN.source, "g");
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+            fragment.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
         }
 
-        // Handle DOM changes
-        const observer = new MutationObserver(handleNewNodes);
-
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true,
-        });
+        const result = formatPrice(match[0]);
+        fragment.appendChild(createTooltipSpan(result.rounded, result.original));
+        anyMatched = true;
+        lastIndex = match.index + match[0].length;
     }
+
+    if (!anyMatched) return;
+
+    if (lastIndex < text.length) {
+        fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
+    }
+    targetNode.parentNode.replaceChild(fragment, targetNode);
 }
 
-// round price on every element updated in the DOM
-function handleNewNodes(mutations) {
-    const addedElements = [];
+// ── Main processing ──
 
-    mutations.forEach((mutation) => {
-        mutation.addedNodes.forEach((node) => {
-            if (node.nodeType === Node.ELEMENT_NODE) {
-                // Skip our own tooltip spans to avoid reprocessing
-                if (node.classList && node.classList.contains("price-rounder-wrapped")) {
-                    return;
+function processElements(elements) {
+    for (const element of elements) {
+        try {
+            if (isProcessed(element)) continue;
+
+            // Try regular text node first
+            if (element.children.length <= 1) {
+                const textNode = Array.from(element.childNodes).find((n) => n.nodeType === Node.TEXT_NODE);
+                if (textNode && textNode.nodeValue.match(PRICE_PATTERN)) {
+                    processTextNode(textNode);
+                    continue;
                 }
-                addedElements.push(node);
-
-                queryAllDeep("*", node).forEach((subNode) => {
-                    if (!subNode.classList || !subNode.classList.contains("price-rounder-wrapped")) {
-                        addedElements.push(subNode);
-                    }
-                });
             }
-        });
-    });
 
-    if (addedElements.length > 0) {
-        processElements(addedElements);
+            // Amazon-specific price elements
+            if (element.classList && element.classList.contains("a-price")) {
+                processAmazonPrice(element);
+            }
+        } catch (error) {
+            console.error("Price Rounder: error processing element:", error);
+        }
     }
 }
 
-// React to messages from the popup
-function handleMessage(request, sender, sendResponse) {
+// ── Mutation observer ──
+
+function handleMutations(mutations) {
+    const elements = [];
+
+    for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+            if (node.nodeType !== Node.ELEMENT_NODE || isProcessed(node)) continue;
+
+            elements.push(node);
+            for (const child of queryAllDeep("*", node)) {
+                if (!isProcessed(child)) elements.push(child);
+            }
+        }
+    }
+
+    if (elements.length > 0) processElements(elements);
+}
+
+// ── Initialization ──
+
+async function initialize(force) {
+    const validUrls = await getValidUrls();
+    const hostname = new URL(window.location.href).hostname;
+
+    if (!validUrls.includes(hostname) && !force) return;
+
+    activeBrackets = await getBrackets();
+
+    const runRounding = () => processElements(queryAllDeep("*"));
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", runRounding);
+    } else {
+        runRounding();
+    }
+
+    new MutationObserver(handleMutations).observe(document.body, {
+        childList: true,
+        subtree: true,
+    });
+}
+
+// ── Message handling ──
+
+function handleMessage(request) {
     if (request.command === "activate") {
         initialize(true);
     } else if (request.command === "deactivate") {
         location.reload();
-    } else {
-        console.warn("The command", request.command, "from", sender, "was received but not handled");
     }
 }
 

@@ -8,15 +8,33 @@
     </head>
     <body>
         <header class="title">
-            <img src="../icon.png" href="Price rounder icon" />
+            <img src="../icon.png" alt="Price rounder icon" />
             <h1>PRICE ROUNDER</h1>
         </header>
-        <div class="url-list-container">
-            <h2>URLs with Active Price Rounding</h2>
+
+        <div class="section-container">
+            <h2>Rounding Brackets</h2>
+            <p class="section-description">Define how prices are rounded based on their value.</p>
+            <table id="bracketsTable">
+                <thead>
+                    <tr>
+                        <th>Up to</th>
+                        <th>Round to nearest</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="bracketsBody"></tbody>
+            </table>
+            <button id="addBracket" class="add-btn">+ Add bracket</button>
+        </div>
+
+        <div class="section-container">
+            <h2>Active Sites</h2>
+            <p class="section-description">Sites where price rounding is enabled.</p>
             <ul class="url-list" id="urlList"></ul>
         </div>
 
+        <script src="../shared/storage.js"></script>
         <script src="options.js"></script>
-        <!--Put after to run after the DOM ran-->
     </body>
 </html>
