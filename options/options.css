@@ -5,8 +5,7 @@ body {
     flex-direction: column;
 }
 
-
-header{
+header {
     display: flex;
     justify-content: left;
     align-items: center;
@@ -15,21 +14,19 @@ header{
     gap: 20px;
 }
 
-header img{
+header img {
     height: 100%;
     margin-left: 30px;
 }
 
-header h1{
-    font-weight:bold;
-    color:#01d68a;
+header h1 {
+    font-weight: bold;
+    color: #01d68a;
     font-size: 25px;
 }
 
-
-
 /* List of urls in use */
-.url-list-container{
+.url-list-container {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -41,7 +38,7 @@ header h1{
     margin-bottom: 20px;
 }
 
-.url-list-container h2{
+.url-list-container h2 {
     font-size: 16px;
 }
 
@@ -68,8 +65,4 @@ header h1{
     cursor: pointer;
     font-size: 16px;
     font-weight: bold;
-
 }
-
-
-

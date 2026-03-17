@@ -1,30 +1,36 @@
 {
-  "manifest_version": 2,
-  "name": "Price rounder",
-  "version": "1.0",
+    "manifest_version": 2,
+    "name": "Price rounder",
+    "version": "1.0",
 
-  "description": "Round up psychological pricing to its nearest whole value, revealing the true cost of items on selected websites. Supports a wide range of currencies, including € $ £ ¥ ₹ ₩ ₽ ₺ ₪ ₦ ৳ ₱ ₨.",
+    "browser_specific_settings": {
+        "gecko": {
+            "id": "price-rounder@example.com"
+        }
+    },
 
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content_script.js"]
-    }
-  ],
+    "description": "Round up psychological pricing to its nearest whole value, revealing the true cost of items on selected websites. Supports a wide range of currencies, including € $ £ ¥ ₹ ₩ ₽ ₺ ₪ ₦ ৳ ₱ ₨.",
 
-  "icons": {
-    "48": "icon.png"
-  },
+    "content_scripts": [
+        {
+            "matches": ["<all_urls>"],
+            "js": ["content_script.js"]
+        }
+    ],
 
-  "browser_action": {
-    "default_icon": "icon.png",
-    "default_title": "An error occurred while trying to open the popup",
-    "default_popup": "popup/popup.html"
-  },
+    "icons": {
+        "48": "icon.png"
+    },
 
-  "options_ui": {
-    "page": "options/options.html"
-  },
+    "browser_action": {
+        "default_icon": "icon.png",
+        "default_title": "An error occurred while trying to open the popup",
+        "default_popup": "popup/popup.html"
+    },
 
-  "permissions": ["activeTab","storage"]
+    "options_ui": {
+        "page": "options/options.html"
+    },
+
+    "permissions": ["activeTab", "storage"]
 }

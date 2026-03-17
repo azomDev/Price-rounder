@@ -1,9 +1,9 @@
-#popup-content{
+#popup-content {
     position: relative;
     width: 300px;
 }
 
-.title{
+.title {
     display: flex;
     justify-content: space-around;
     align-items: center;
@@ -11,18 +11,15 @@
     height: 40px;
 }
 
-.title img{
+.title img {
     height: 100%;
 }
 
-.title h1{
-    font-weight:bold;
-    color:#01d68a;
+.title h1 {
+    font-weight: bold;
+    color: #01d68a;
     font-size: 25px;
 }
-
-
-
 
 /* Button */
 .button_wrapper {
